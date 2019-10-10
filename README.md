@@ -10,4 +10,3 @@ This library can be linked against as a shared library. To use it, follow the in
 * In terminal, `git submodule add https://github.com/libcoolsocket/qt5 PREFERRED_DIR`
 * In your `CMakeLists.txt`, `add_subdirectory(PREFERRED_DIR)`
 * And finally link against it by calling `target_link_libraries(EXE_OR_LIB_NAME PUBLIC coolsocket)`
--
