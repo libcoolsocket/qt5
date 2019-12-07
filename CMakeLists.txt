@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.1.0)
 project(coolsocket VERSION 1.0
         DESCRIPTION "CoolSocket TCP communication library"
         LANGUAGES CXX)
