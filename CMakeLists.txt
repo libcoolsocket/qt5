@@ -20,7 +20,7 @@ set(HEADER_FILES
 set(SOURCE_FILES
         src/coolsocket.cpp)
 
-add_library(coolsocket SHARED ${HEADER_FILES} ${SOURCE_FILES})
+add_library(coolsocket ${HEADER_FILES} ${SOURCE_FILES})
 
 target_include_directories(coolsocket PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
