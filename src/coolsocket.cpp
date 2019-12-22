@@ -19,204 +19,184 @@
 #include "coolsocket.h"
 
 namespace CoolSocket {
-	const char *HEADER_KEYWORD_LENGTH = "length";
-	const char *HEADER_DIVIDER = "\nHEADER_END\n";
-	const int HEADER_HEAP_SIZE = 8196;
-	const quint16 TIMEOUT_NONE = -1;
-	const quint16 TIMEOUT_DEFAULT = 5000;
+    const char *HEADER_KEYWORD_LENGTH = "length";
+    const char *HEADER_DIVIDER = "\nHEADER_END\n";
+    const int HEADER_HEAP_SIZE = 8196;
+    const quint16 TIMEOUT_NONE = -1;
+    const quint16 TIMEOUT_DEFAULT = 5000;
 }
 
 CoolSocket::Server::Server(const QHostAddress &hostAddress, quint16 port, int timeout, QObject *parent)
-		: QTcpServer(parent)
-{
-	setTimeout(timeout);
-	setHostAddress(hostAddress);
-	setPort(port);
+        : QTcpServer(parent) {
+    setTimeout(timeout);
+    setHostAddress(hostAddress);
+    setPort(port);
 }
 
-CoolSocket::Server::~Server()
-{
-	close();
+CoolSocket::Server::~Server() {
+    close();
 }
 
-bool CoolSocket::Server::start()
-{
-	return listen(hostAddress(), port());
+bool CoolSocket::Server::start() {
+    return listen(hostAddress(), port());
 }
 
-QHostAddress CoolSocket::Server::hostAddress() const
-{
-	return m_hostAddress;
+QHostAddress CoolSocket::Server::hostAddress() const {
+    return m_hostAddress;
 }
 
-quint16 CoolSocket::Server::port() const
-{
-	return m_port;
+quint16 CoolSocket::Server::port() const {
+    return m_port;
 }
 
-void CoolSocket::Server::setHostAddress(const QHostAddress &hostAddress)
-{
-	m_hostAddress = hostAddress;
+void CoolSocket::Server::setHostAddress(const QHostAddress &hostAddress) {
+    m_hostAddress = hostAddress;
 }
 
-void CoolSocket::Server::setPort(quint16 port)
-{
-	m_port = port;
+void CoolSocket::Server::setPort(quint16 port) {
+    m_port = port;
 }
 
-void CoolSocket::Server::setTimeout(int timeout)
-{
-	m_timeout = timeout;
+void CoolSocket::Server::setTimeout(int timeout) {
+    m_timeout = timeout;
 }
 
-int CoolSocket::Server::timeout()
-{
-	return m_timeout;
+int CoolSocket::Server::timeout() {
+    return m_timeout;
 }
 
-void CoolSocket::Connection::reply(const QJsonObject &reply)
-{
-	this->reply(QJsonDocument(reply).toJson());
+void CoolSocket::Connection::reply(const QJsonObject &reply) {
+    this->reply(QJsonDocument(reply).toJson());
 }
 
-void CoolSocket::Connection::reply(const QString &reply)
-{
-	this->reply(reply.toUtf8());
+void CoolSocket::Connection::reply(const QString &reply) {
+    this->reply(reply.toUtf8());
 }
 
-void CoolSocket::Connection::reply(const QByteArray &reply)
-{
-	QJsonObject headerIndex{
-			{HEADER_KEYWORD_LENGTH, reply.length()}
-	};
+void CoolSocket::Connection::reply(const QByteArray &reply) {
+    QJsonObject headerIndex{
+            {HEADER_KEYWORD_LENGTH, reply.length()}
+    };
 
-	socket()->write(QJsonDocument(headerIndex).toJson());
-	socket()->write(HEADER_DIVIDER);
-	socket()->flush();
+    socket()->write(QJsonDocument(headerIndex).toJson());
+    socket()->write(HEADER_DIVIDER);
+    socket()->flush();
 
-	socket()->write(reply);
-	socket()->flush();
+    socket()->write(reply);
+    socket()->flush();
 
-	while (socket()->bytesToWrite() != 0) {
-		if (!socket()->waitForBytesWritten(timeout() < 1000 ? 1000 : timeout())) {
-			qInfo() << this << "Timed out !!!";
-			throw exception();
-		}
-	}
+    while (socket()->bytesToWrite() != 0) {
+        if (!socket()->waitForBytesWritten(timeout() < 1000 ? 1000 : timeout())) {
+            qInfo() << this << "Timed out !!!";
+            throw exception();
+        }
+    }
 }
 
-CoolSocket::Response CoolSocket::Connection::receive()
-{
-	clock_t lastDataAvailable = clock();
-	size_t headerPosition = string::npos;
-	CoolSocket::Response response;
-	QByteArray headerData;
+CoolSocket::Response CoolSocket::Connection::receive() {
+    clock_t lastDataAvailable = clock();
+    size_t headerPosition = string::npos;
+    CoolSocket::Response response;
+    QByteArray headerData;
 
-	while (socket()->isReadable()) {
-		if (headerPosition == string::npos) {
-			if (socket()->waitForReadyRead(2000)) {
-				headerData.append(socket()->readAll());
-				lastDataAvailable = clock();
-			}
+    while (socket()->isReadable()) {
+        if (headerPosition == string::npos) {
+            if (socket()->waitForReadyRead(2000)) {
+                headerData.append(socket()->readAll());
+                lastDataAvailable = clock();
+            }
 
-			headerPosition = headerData.indexOf(HEADER_DIVIDER);
+            headerPosition = headerData.indexOf(HEADER_DIVIDER);
 
-			if (headerPosition != string::npos) {
-				size_t dividerOccupiedSize = strlen(HEADER_DIVIDER) + headerPosition;
+            if (headerPosition != string::npos) {
+                size_t dividerOccupiedSize = strlen(HEADER_DIVIDER) + headerPosition;
 
-				if (headerData.length() > dividerOccupiedSize)
-					response.msg.append(headerData.right(dividerOccupiedSize));
+                if ((unsigned) headerData.length() > dividerOccupiedSize)
+                    response.msg.append(headerData.right(dividerOccupiedSize));
 
-				headerData.resize(headerPosition);
+                headerData.resize(headerPosition);
 
-				response.headerIndex = QJsonDocument::fromJson(headerData)
-						.object();
+                response.headerIndex = QJsonDocument::fromJson(headerData)
+                        .object();
 
-				if (response.headerIndex.contains(HEADER_KEYWORD_LENGTH)) {
-					response.length = response.headerIndex.value(HEADER_KEYWORD_LENGTH)
-							.toVariant()
-							.toUInt();
-				} else
-					break;
+                if (response.headerIndex.contains(HEADER_KEYWORD_LENGTH)) {
+                    response.length = response.headerIndex.value(HEADER_KEYWORD_LENGTH)
+                            .toVariant()
+                            .toUInt();
+                } else
+                    break;
 
-			}
+            }
 
-			if (headerData.length() > HEADER_HEAP_SIZE) {
-				qCritical() << this << "Header exceeds heap size:" << headerData.length();
-				throw exception();
-			}
-		} else {
-			if (socket()->waitForReadyRead(2000)) {
-				response.msg.append(socket()->readAll());
-				lastDataAvailable = clock();
-			}
+            if (headerData.length() > HEADER_HEAP_SIZE) {
+                qCritical() << this << "Header exceeds heap size:" << headerData.length();
+                throw exception();
+            }
+        } else {
+            if (socket()->waitForReadyRead(2000)) {
+                response.msg.append(socket()->readAll());
+                lastDataAvailable = clock();
+            }
 
-			if (response.msg.length() >= response.length)
-				break;
-		}
+            if ((unsigned) response.msg.length() >= response.length)
+                break;
+        }
 
-		if (timeout() >= 0 && (clock() - lastDataAvailable) > timeout())
-			throw exception();
-	}
+        if (timeout() >= 0 && (clock() - lastDataAvailable) > timeout())
+            throw exception();
+    }
 
-	return response;
+    return response;
 }
 
 CoolSocket::Connection::Connection(QTcpSocket *socket, int msecTimeout, QObject *parent)
-		: QObject(parent)
-{
-	m_socket = socket;
-	m_timeout = msecTimeout;
+        : QObject(parent) {
+    m_socket = socket;
+    m_timeout = msecTimeout;
 }
 
-CoolSocket::Connection::~Connection()
-{
-	if (this->m_socket == nullptr)
-		return;
+CoolSocket::Connection::~Connection() {
+    if (this->m_socket == nullptr)
+        return;
 
-	if (this->m_socket->isOpen())
-		this->m_socket->close();
+    if (this->m_socket->isOpen())
+        this->m_socket->close();
 
-	delete m_socket;
+    delete m_socket;
 }
 
-void CoolSocket::Connection::setTimeout(int msecs)
-{
-	this->m_timeout = msecs;
+void CoolSocket::Connection::setTimeout(int msecs) {
+    this->m_timeout = msecs;
 }
 
-QTcpSocket *CoolSocket::Connection::socket()
-{
-	return m_socket;
+QTcpSocket *CoolSocket::Connection::socket() {
+    return m_socket;
 }
 
-int CoolSocket::Connection::timeout()
-{
-	return m_timeout;
+int CoolSocket::Connection::timeout() {
+    return m_timeout;
 }
 
 CoolSocket::Connection *CoolSocket::Client::openConnection(const QHostAddress &hostName,
                                                            quint16 port,
                                                            int timeoutMSeconds,
-                                                           QObject *sender)
-{
-	auto *socket = new QTcpSocket;
-	auto *connection = new CoolSocket::Connection(socket, timeoutMSeconds, sender);
+                                                           QObject *sender) {
+    auto *socket = new QTcpSocket;
+    auto *connection = new CoolSocket::Connection(socket, timeoutMSeconds, sender);
 
-	QTcpSocket::connect(sender, SIGNAL(destroyed()), connection, SLOT(deleteLater()));
+    QTcpSocket::connect(sender, SIGNAL(destroyed()), connection, SLOT(deleteLater()));
 
-	socket->connectToHost(hostName, port);
+    socket->connectToHost(hostName, port);
 
-	while (QAbstractSocket::SocketState::ConnectingState == socket->state())
-		socket->waitForConnected(timeoutMSeconds);
+    while (QAbstractSocket::SocketState::ConnectingState == socket->state())
+        socket->waitForConnected(timeoutMSeconds);
 
-	if (QAbstractSocket::SocketState::ConnectedState != socket->state())
-		throw exception();
+    if (QAbstractSocket::SocketState::ConnectedState != socket->state())
+        throw exception();
 
-	return connection;
+    return connection;
 }
 
-QJsonObject CoolSocket::Response::asJson() const
-{
-	return QJsonDocument::fromJson(msg.toUtf8()).object();
+QJsonObject CoolSocket::Response::asJson() const {
+    return QJsonDocument::fromJson(msg.toUtf8()).object();
 }
